@@ -131,6 +131,11 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
             out_base='SEgfm2T1'
             ),
     name="epi2reg");
+                                   
+    print ("Apply epi2reg to SBRef..");
+    node_apply_epi2reg_SBref= Node(fsl.ApplyXFM(
+            ),
+    name="node_apply_epi2reg_SBref");
                       
     print ("Estimates inverse transform from epi2reg...");
     node_invert_epi2reg= Node(fsl.ConvertXFM(
@@ -150,6 +155,7 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
         'topup_movpar_txt',
         'topup_field_coef_img',
         'epi2str_mat',
+        'epi2str_img',
         'fmri_mask_img',
         'rfmri_unwarped_imgs',
         'sb_ref_unwarped_img',
@@ -185,7 +191,7 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_coregister_SBref2SEgfm , node_apply_topup_to_SBref, [("out_file", "in_files")]),
 #corregister to T1
                 (node_mask_T1 , node_epireg, [("out_file", "t1_brain")]),
-                (node_topup_SEgfm , node_epireg, [("out_corrected", "epi")]),
+                (node_apply_topup_to_SBref , node_epireg, [("out_corrected", "epi")]),
                 (node_epireg,node_invert_epi2reg,[("epi2str_mat", "in_file")]),
                 (node_coregister_SBref2SEgfm,node_fmriMask,[("out_file", "in_file")]),
 
@@ -194,10 +200,12 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_realign_bold , node_output, [("par_file", "realign_movpar_txt"),
                                                    ("out_file","realign_fmri_img")]),
                 (node_fmriMask , node_output, [("mask_file", "fmri_mask_img")]),
-                (node_epireg, node_output, [("epi2str_mat", "epi2str_mat")]), 
+                (node_epireg, node_output, [("epi2str_mat", "epi2str_mat")]),
+                (node_epireg, node_output,[("out_file","epi2str_img")]),
                 (node_topup_SEgfm, node_output, [("out_fieldcoef", "topup_field_coef_img"),
                                                  ("out_corrected","sb_ref_unwarped_img")]),
                 (node_apply_topup, node_output,[("out_corrected","rfmri_unwarped_imgs")]),
+        
                 
     ]);      
     return(wf)
