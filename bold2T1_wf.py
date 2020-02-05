@@ -62,6 +62,7 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
     node_eliminate_first_scans=Node(fsl.ExtractROI(
             t_min=tvols[0],
             t_size=tvols[1]- tvols[0],
+           # roi_file="func_bold_ap_tvols",
             ),
     name="eliminate_first_scans"
     );
@@ -99,7 +100,15 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
     name='Topup_SEgfm_estimation'
     );
     
-    print ("Preparing TOPUP applywarp...");
+    print ("applywarp from TOPUP...");
+    node_apply_topup_to_SBref= Node(fsl.ApplyTOPUP(
+                            encoding_file=ACQ_PARAMS,
+                            method='jac',
+                            interp='spline',
+                            ), 
+    name="apply_topup_to_SBref");                               
+                                   
+    print ("applywarp from TOPUP...");
     node_apply_topup= Node(fsl.ApplyTOPUP(
                             encoding_file=ACQ_PARAMS,
                             method='jac',
@@ -170,11 +179,16 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_realign_bold , node_apply_topup, [("out_file", "in_files")]),
                 (node_topup_SEgfm , node_apply_topup, [("out_fieldcoef", "in_topup_fieldcoef"),
                                                        ("out_movpar","in_topup_movpar") ]),
+    
+                (node_topup_SEgfm , node_apply_topup_to_SBref, [("out_fieldcoef", "in_topup_fieldcoef"),
+                                                       ("out_movpar","in_topup_movpar") ]),
+                (node_coregister_SBref2SEgfm , node_apply_topup_to_SBref, [("out_file", "in_files")]),
 #corregister to T1
                 (node_mask_T1 , node_epireg, [("out_file", "t1_brain")]),
                 (node_topup_SEgfm , node_epireg, [("out_corrected", "epi")]),
                 (node_epireg,node_invert_epi2reg,[("epi2str_mat", "in_file")]),
                 (node_coregister_SBref2SEgfm,node_fmriMask,[("out_file", "in_file")]),
+
 #yeld relevant data to output node
                 (node_coregister_SBref2SEgfm , node_output, [("out_matrix_file", "SBref2SEgfm_mat")]),
                 (node_realign_bold , node_output, [("par_file", "realign_movpar_txt"),
