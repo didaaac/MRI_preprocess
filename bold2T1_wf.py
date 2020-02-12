@@ -9,7 +9,11 @@ Created on Tue Feb  4 12:27:39 2020
 def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preprocess/acparams_hcp.txt"):
     """Estimates transformation from Gradiend Field Distortion-warped BOLD to T1
     
-    1)realign BOLD
+    1) Realign BOLD to SBref (fsl.MCFLIRT)
+    2) Field inhomogeneity correction of SBref from SEfm_AP and SEfm_PA (fsl.TOPUP)
+    3) Structural Coregistration ? of SBref to T1 (fsl.EpiReg)
+    4) 
+    
     2)corregister SB_ref + MB_bold to SE_gfm_AP 
     3)estimate unwarping with TOPUP
     4)apply topup to SB_ref and MB_bold
@@ -18,6 +22,7 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
     Parameters
     ----------
     tvols: [t_initial, t_final] volumes included in the preprocess
+    ACQ_params: Path to txt file containing MRI acquisition parameters; needs to be specified for topup correction
     
     
     Returns
@@ -60,86 +65,82 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
           
     print ("Eliminates first volumes.")   
     node_eliminate_first_scans=Node(fsl.ExtractROI(
-            t_min=tvols[0],
-            t_size=tvols[1]- tvols[0],
-           # roi_file="func_bold_ap_tvols",
+            t_min=tvols[0], # first included volume
+            t_size=tvols[1]- tvols[0], # number of volumes from the first to the last one
             ),
     name="eliminate_first_scans"
     );
     
     print ("Realigns fMRI BOLD volumes to SBref in SEgfm-AP space") 
     node_realign_bold=Node(fsl.MCFLIRT(
-            save_plots=True,
+            save_plots=True, # save transformation matrices
             ),
     name="realign_fmri2SBref"
     );
  
     print ("Concatenates AP and PA SEgfm volumes...");   
-    node_merge_ap_pa_inputs = Node(utility.base.Merge(2),name='Merge_ap_pa_inputs')   
+    # AP AP AP PA PA PA
+    node_merge_ap_pa_inputs = Node(utility.base.Merge(2 # number of inputs; it concatenates lists
+    ), name='Merge_ap_pa_inputs')   
     node_merge_SEgfm=Node(fsl.Merge(
-           # in_files = [SUBJECT_FSTRUCT_DIC['func_se_gfm_ap'],
-           #             SUBJECT_FSTRUCT_DIC['func_se_gfm_pa']],
-            dimension = 't'   
+            dimension = 't'  # ¿? 
             ),
     name='Merge_SEgfm_AP_PA'
     );
-    
-    '''
-    write_acqparams_fout_fileile_interface = Function(input_names=["out_file", "scan_value"],
-                             output_names=["acqparams_file"],
-                             function=write_acqparams_file);
-    write_acqparams_file_interface.inputs.out_file=path.join(wf.base_dir,'acparams_hcp.txt');
-    node_write_acpparams_file=Node(interface=write_acqparams_file_interface,
-                                   name='Write_acqparam_file'
-    );
-    '''
-    
-    node_topup_SEgfm=Node(fsl.TOPUP(#in_file=OUT_FOLDER + os.sep+ 'sefm_ap_pa.nii.gz', 
+      
+    print ("Estimates TopUp inhomogeneity correction from SEfm_AP and SEfm_PA...");   
+    node_topup_SEgfm=Node(fsl.TOPUP(
                   encoding_file=ACQ_PARAMS,
                     ),
     name='Topup_SEgfm_estimation'
     );
     
-    print ("applywarp from TOPUP...");
+    print ("Applies warp from TOPUP to correct SBref...");
     node_apply_topup_to_SBref= Node(fsl.ApplyTOPUP(
                             encoding_file=ACQ_PARAMS,
-                            method='jac',
-                            interp='spline',
+                            method='jac', # jacobian modulation
+                            interp='spline', # interpolation method
                             ), 
     name="apply_topup_to_SBref");                               
                                    
-    print ("applywarp from TOPUP...");
+    print ("Applies warp from TOPUP to correct realigned BOLD...");
     node_apply_topup= Node(fsl.ApplyTOPUP(
                             encoding_file=ACQ_PARAMS,
-                            method='jac',
-                            interp='spline',
+                            method='jac', # jacobian modulation
+                            interp='spline', # interpolation method
                             ), 
     name="apply_topup");
-           
-                                   
+    
     #Registration to T1. Epireg without fieldmaps combined (see https://www.fmrib.ox.ac.uk/primers/intro_primer/ExBox20/IntroBox20.html)                    
     print ("Eliminates scalp from brain using T1 high res image");
     node_mask_T1=Node(fsl.BET(
-           # in_file=SUBJECT_FSTRUCT_DIC['anat_T1'],
-            frac=0.7
+            frac=0.7 # umbral
             ),
     name="mask_T1");   
 
-    print ("Estimate transformation from SBref to T1");
+    print ("Estimate and appply transformation from SBref to T1");
     node_epireg = Node(fsl.EpiReg(
             #t1_head=SUBJECT_FSTRUCT_DIC['anat_T1'],
             out_base='SEgfm2T1'
             ),
     name="epi2reg");
+                        
+    '''  
+    EPI2REG ALREADY APPLIED         
+    print ("Apply epi2reg to SBRef..");
+    node_apply_epi2reg_SBref= Node(fsl.ApplyXFM(
+            ),
+    name="node_apply_epi2reg_SBref");
+    '''
                       
-    print ("Estimates inverse transform from epi2reg...");
+    print ("Estimates inverse transform from epi2reg..."); # quality control
     node_invert_epi2reg= Node(fsl.ConvertXFM(
             invert_xfm=True),
     name="invert_epi2reg");
                                                                     
-        
-    node_fmriMask=Node(fsl.BET(mask=True,),
-    name='fmriMask'
+    print ("..."); 
+    node_mask_fMRI=Node(fsl.BET(mask=True,),
+    name='mask_fMRI'
     );   
     #node_fmriMask.overwrite=True
     print ("Setting OUTPUT node...");
@@ -150,6 +151,7 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
         'topup_movpar_txt',
         'topup_field_coef_img',
         'epi2str_mat',
+        'epi2str_img',
         'fmri_mask_img',
         'rfmri_unwarped_imgs',
         'sb_ref_unwarped_img',
@@ -158,18 +160,17 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                                                      
     #Connects nodes
     wf.connect([
-#inputs         
+                #inputs         
                 (node_input, node_average_SEgfm, [("func_segfm_ap_img", "in_file")]),
                 (node_input, node_coregister_SBref2SEgfm, [("func_sbref_img", "in_file")]),
                 (node_input, node_eliminate_first_scans, [("func_bold_ap_img", "in_file")]),
                 (node_input, node_merge_ap_pa_inputs,[("func_segfm_ap_img", "in1"),
-                                                      ("func_segfm_pa_img", "in2")
-                ]),
+                                                      ("func_segfm_pa_img", "in2")]),
                 (node_merge_ap_pa_inputs, node_merge_SEgfm,[("out", "in_files")]),
                 (node_input, node_epireg, [("T1_img", "t1_head")]),
                 (node_input, node_mask_T1, [("T1_img", "in_file")]),
                                             
-#connections    
+                #connections    
                 (node_eliminate_first_scans, node_realign_bold, [("roi_file", "in_file")]),
                 (node_average_SEgfm , node_coregister_SBref2SEgfm, [("out_file", "reference")]),
                 (node_coregister_SBref2SEgfm , node_realign_bold, [("out_file", "ref_file")]),
@@ -179,25 +180,27 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_realign_bold , node_apply_topup, [("out_file", "in_files")]),
                 (node_topup_SEgfm , node_apply_topup, [("out_fieldcoef", "in_topup_fieldcoef"),
                                                        ("out_movpar","in_topup_movpar") ]),
-    
                 (node_topup_SEgfm , node_apply_topup_to_SBref, [("out_fieldcoef", "in_topup_fieldcoef"),
                                                        ("out_movpar","in_topup_movpar") ]),
                 (node_coregister_SBref2SEgfm , node_apply_topup_to_SBref, [("out_file", "in_files")]),
-#corregister to T1
+                
+                #corregister to T1
                 (node_mask_T1 , node_epireg, [("out_file", "t1_brain")]),
-                (node_topup_SEgfm , node_epireg, [("out_corrected", "epi")]),
+                (node_apply_topup_to_SBref , node_epireg, [("out_corrected", "epi")]),
                 (node_epireg,node_invert_epi2reg,[("epi2str_mat", "in_file")]),
-                (node_coregister_SBref2SEgfm,node_fmriMask,[("out_file", "in_file")]),
+                (node_coregister_SBref2SEgfm,node_mask_fMRI,[("out_file", "in_file")]),
 
-#yeld relevant data to output node
+                #yeld relevant data to output node
                 (node_coregister_SBref2SEgfm , node_output, [("out_matrix_file", "SBref2SEgfm_mat")]),
                 (node_realign_bold , node_output, [("par_file", "realign_movpar_txt"),
                                                    ("out_file","realign_fmri_img")]),
-                (node_fmriMask , node_output, [("mask_file", "fmri_mask_img")]),
-                (node_epireg, node_output, [("epi2str_mat", "epi2str_mat")]), 
+                (node_mask_fMRI , node_output, [("mask_file", "fmri_mask_img")]),
+                (node_epireg, node_output, [("epi2str_mat", "epi2str_mat")]),
+                (node_epireg, node_output,[("out_file","epi2str_img")]),
                 (node_topup_SEgfm, node_output, [("out_fieldcoef", "topup_field_coef_img"),
                                                  ("out_corrected","sb_ref_unwarped_img")]),
                 (node_apply_topup, node_output,[("out_corrected","rfmri_unwarped_imgs")]),
+        
                 
     ]);      
     return(wf)
