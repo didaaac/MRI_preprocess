@@ -1,5 +1,5 @@
 #This is batch helps transforming from DICOM to BIDs nifti selected sequences as long as they do not exist in a target FOLDER
-#source activate python2_7
+source activate python2_7
 TARGET_FOLDER=''
 OUTPUT_FOLDER='/institut/processed_data/BBHI_structural'
 DICOM_INPUT_FOLDER='/institut/BBHI_DICOMS'
@@ -26,8 +26,10 @@ for i in $list_subs; do
 	else
 	  echo "Transforming $SUBJECT_ID ..."
 	  #echo "$DICOM_INPUT_FOLDER/{subject}/$sequ/*IMA"
-	 heudiconv "-d $DICOM_INPUT_FOLDER/{subject}/$sequ/*IMA -s $SUBJECT_ID -ss $SESSION_NUM -f /home/didac/Scripts/dicom2BIDS/convert_BBHI.py  -c dcm2niix -b -o $OUTPUT_FOLDER"	  
+     #ls 
+	 heudiconv -d $DICOM_INPUT_FOLDER/{subject}/$sequ/*IMA -s $SUBJECT_ID -ss $SESSION_NUM -f convert_BBHI_structural.py -c dcm2niix -b -o $OUTPUT_FOLDER	  
       fi
   done
 done
 
+source deactivate
