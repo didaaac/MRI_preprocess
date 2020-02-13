@@ -1,7 +1,7 @@
 #This is batch helps transforming from DICOM to BIDs nifti selected sequences as long as they do not exist in a target FOLDER
 source activate python2_7
 TARGET_FOLDER=''
-OUTPUT_FOLDER='/institut/processed_data/BBHI_structural2'
+OUTPUT_FOLDER='/institut/processed_data/BBHI_structural'
 DICOM_INPUT_FOLDER='/institut/BBHI_DICOMS'
 SESSION_NUM='01'
 
