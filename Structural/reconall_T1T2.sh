@@ -7,7 +7,7 @@
 #Dídac Macià Bros, 01-04-2019
 
 #**************** USAGE ******************
-#batch_structural.sh -o SUBJECTS_DIR_FREESURFER -i BIDS_DIRECTORY -p num_parallel_cores
+#reconall_T1T2.sh -o SUBJECTS_DIR_FREESURFER -i BIDS_DIRECTORY -p num_parallel_cores
 #/institut/processed_data/BBHI_output/batch_structural.sh -o /institut/processed_data/BBHI_output/structural -i /institut/processed_data/BBHI_structural -p 4
 #*****************************************
 
