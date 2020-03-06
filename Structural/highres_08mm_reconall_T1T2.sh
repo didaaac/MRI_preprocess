@@ -4,11 +4,11 @@
 #Processes multiple T1 runs
 #Careful. Doesn't take into account T2 other than the first run... User should ckeck its quality
 #No high-res processing so far though it could be done and may be preferable
-#Dídac Macià Bros, 01-04-2019
+#Dídac Macià Bros, 25-02-2019
 
 #**************** USAGE ******************
-#reconall_T1T2.sh -o SUBJECTS_DIR_FREESURFER -i BIDS_DIRECTORY -p num_parallel_cores
-#/institut/processed_data/BBHI_output/batch_structural.sh -o /institut/processed_data/BBHI_output/structural -i /institut/processed_data/BBHI_structural -p 4
+#highres_08mm_reconall_T1T2.sh -o SUBJECTS_DIR_FREESURFER -i BIDS_DIRECTORY -p num_parallel_cores -e expert_file -c choosen_subjects_dir
+#/<where_this_script_is>/highres_08mm_reconall_T1T2.sh -o /home/mariacabello/wf_workspace/CHROID_PLEXUS/execution_5subjects_08mm -i /institut/processed_data/BBHI_structural -p 4 -e /home/mariacabello/git_projects/MRI_preprocess/Structural/expert_08mm.opts -c /home/mariacabello/wf_workspace/CHROID_PLEXUS/execution_5subjects_1mm
 #*****************************************
 
 POSITIONAL=()
@@ -32,6 +32,16 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -e|--input_dir)
+    EXPERT_FILE="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -c|--choosen_subjects_dir)
+    CHOOSEN_SUBJECTS_DIR="$2"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -48,16 +58,18 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 echo SUBJECT_DIR     = "${SUBJECTS_DIR}"
 echo BIDS_DIR        = "${BIDS_FOLDER}"
+
 echo PARALLEL CORES  = "${PCORES}"
 
 
 #export SUBJECTS_DIR='/institut/processed_data/BBHI_output/structural'
 #BIDS_FOLDER='/institut/processed_data/BBHI_structural'
 
-for d in $BIDS_FOLDER/*/ ; do
+for d in $CHOOSEN_SUBJECTS_DIR/*/ ; do
     run_counter=0
     for nrun in $BIDS_FOLDER/$(basename $d)/ses-01/anat/$(basename $d)_ses-01_run-*_T1w.nii.gz ; do  
       run_counter=$((run_counter+1))
+      
       if ((run_counter>1)) ; then
  SUBJECT_ID=$(basename $d)_run_$run_counter
  echo "REPEATED RUN num_$run_counter"
@@ -66,12 +78,14 @@ for d in $BIDS_FOLDER/*/ ; do
       fi
      
       if [ -e $SUBJECTS_DIR/$SUBJECT_ID ] ;then
- echo "$SUBJECT_ID is already processed. Skipping..."
+	echo "$SUBJECT_ID is already processed. Skipping..."
       else
- echo "Processing $SUBJECT_ID ... with source image : $nrun"
- recon-all -all -s $SUBJECT_ID  -i $nrun -T2 $BIDS_FOLDER/$(basename $d)/ses-01/anat/$(basename $d)_ses-01_run-01_T2w.nii.gz -T2pial -openmp $PCORES -3T
+	echo "Processing $SUBJECT_ID ... with source image : $nrun"
+	recon-all -all -s $SUBJECT_ID -hires -i $nrun -T2 $BIDS_FOLDER/$(basename $d)/ses-01/anat/$(basename $d)_ses-01_run-01_T2w.nii.gz -T2pial -openmp $PCORES -3T  -expert $EXPERT_FILE 
       fi
-    done
+    done 
 done
 
 #-highres -expert $EXPERT_HIGHRES_FILE \ 
+
+

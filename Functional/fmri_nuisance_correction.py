@@ -7,6 +7,45 @@
 import matplotlib.pyplot as plt
 plt.plot([1, 2, 3, 4])
 
+def wm_csf_eroded(aseg_file, erode_size = 10): #CHANGE FUNCTION NAME
+    """Extract White Matter and CSF (eroded) 
+    aseg_file: string, path to freesurfer-aseg segmentation (aseg.mgz)
+    """
+    
+    import nibabel as nib
+    import numpy as np
+    import cv2
+    
+    kernel = np.ones((erode_size,erode_size), np.uint8) 
+    
+    #WHITE MATTER
+    aseg = nib.load(aseg_file)
+    aseg_data = aseg.get_fdata()
+    aseg_wm_data = aseg_data.copy()
+    aseg_wm_data[((aseg_data!=2)*(aseg_data!=41))] = 0
+    aseg_wm_data[aseg_wm_data>0]=1
+    #load epi2reg
+    # eroding    
+    aseg_wm_eroded_data = cv2.erode(aseg_wm_data, kernel, iterations=1) 
+    
+    #CSF
+#    csf_labels = [4,  # Left-Lateral-Ventricle
+#       5,  # Left-Inf-Lat-Vent
+#       14, # 3rd Ventricle
+#       15, # 4th Ventricle
+#       24, # CSF
+#       43, # Right-Lateral-Ventricle
+#       44] # Right-Inf-Lat-Vent
+    aseg_csf_data = np.zeros(aseg_data.shape)
+    aseg_csf_data[((aseg_data!=4)*(aseg_data!=5)*(aseg_data!=14)*(aseg_data!=15)*(aseg_data!=24)*(aseg_data!=43)*(aseg_data!=44))] = 0
+    aseg_csf_data[aseg_csf_data>0]=1
+    #load epi2reg
+    # eroding    
+    aseg_csf_eroded_data = cv2.erode(aseg_csf_data, kernel, iterations=1) 
+    
+    
+   
+
 def motion_regressors(realign_movpar_txt, output_dir, order=0, derivatives=1):
     """Compute motion regressors upto given order and derivative
     motion + d(motion)/dt + d2(motion)/dt2 (linear + quadratic)

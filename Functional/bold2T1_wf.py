@@ -6,18 +6,21 @@ Created on Tue Feb  4 12:27:39 2020
 """
 
 
-def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preprocess/acparams_hcp.txt"):
+def get_fmri2standard_wf(tvols, subject_id, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preprocess/acparams_hcp.txt"):
     """Estimates transformation from Gradiend Field Distortion-warped BOLD to T1
     
-    1) Realign BOLD to SBref (fsl.MCFLIRT)
-    2) Field inhomogeneity correction of SBref from SEfm_AP and SEfm_PA (fsl.TOPUP)
-    3) Structural Coregistration ? of SBref to T1 (fsl.EpiReg)
-    4) 
-    
-    2)corregister SB_ref + MB_bold to SE_gfm_AP 
-    3)estimate unwarping with TOPUP
-    4)apply topup to SB_ref and MB_bold
-    5)corregister SB_ref to T1_anat and apply it to MB_bold 
+    In general:
+        BOLD is field-inhomogeneity corrected and corregistered into standard space (T1).  
+        
+    To do so, the following steps are carried out:
+        1)  Corregister SBref to SEgfmAP (fsl.FLIRT)
+        2)  Realign BOLD to corrected SBref (fsl.MCFLIRT)
+        3)  Field inhomogeneity correction estimation of SBref from SEfm_AP and SEfm_PA (fsl.TOPUP)
+        4)  Apply field inhomogeneity correction to SBref (fsl.ApplyTOPUP)
+        5)  Apply field inhomogeneity correction to BOLD (fsl.ApplyTOPUP)
+        6)  Transform free-surfer brain mask (brain.mgz) to T1 space (freesurfer.ApplyVolTransform ;mri_vol2vol), 
+            then binarized (fsl.UnaryMaths) and the mask is extracted from T1 (fsl.BinaryMaths)
+        7)  Corregister BOLD (field-inhomogeneity corrected) to Standard T1 (fsl.Epi2Reg)
 
     Parameters
     ----------
@@ -30,14 +33,11 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
     Workflow with the transformation
  
     """
-    from os import path
-    from nipype.algorithms import confounds
-    #from nipype.interfaces.utility import Function
-    from nipype import Workflow, Node, MapNode, Function, interfaces
-    from nipype.interfaces import fsl, utility         
+    from nipype import Workflow, Node, interfaces
+    from nipype.interfaces import fsl, utility, freesurfer    
     
     print("defining workflow...");
-    wf=Workflow(name='fmri2standard', base_dir='');
+    wf=Workflow(name=subject_id, base_dir='');
     
     #Setting INPUT node...
     print("defines input node...");
@@ -46,7 +46,8 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
         'func_segfm_ap_img',
         'func_segfm_pa_img',
         'func_bold_ap_img',
-        'T1_img'
+        'T1_img',
+        'T1_brain_freesurfer_mask'
     ]),
     name='input_node') 
     
@@ -111,13 +112,44 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                             ), 
     name="apply_topup");
     
+    
+## BRAIN MASK
+    
     #Registration to T1. Epireg without fieldmaps combined (see https://www.fmrib.ox.ac.uk/primers/intro_primer/ExBox20/IntroBox20.html)                    
-    print ("Eliminates scalp from brain using T1 high res image");
-    node_mask_T1=Node(fsl.BET(
-            frac=0.7 # umbral
+#    print ("Eliminates scalp from brain using T1 high res image");
+#    node_mask_T1=Node(fsl.BET(
+#            frac=0.7 # umbral
+#            ),
+#    name="mask_T1");   
+    
+    print('Transform brain mask T1 from freesurfer space to T1 space');
+    node_vol2vol_brain = Node(freesurfer.ApplyVolTransform(
+            reg_header=True, # (--regheader)
+            transformed_file = 'brainmask_warped.nii.gz'
+            #source_file --mov (INPUT; freesurfer brain.mgz)
+            #transformed_file --o (OUTPUT; ...brain.nii.gz)
+            #target_file --targ (REFERENCE; ...T1w.nii.gz) 
             ),
-    name="mask_T1");   
+    name="vol2vol");
+    
+    print('Transform brain mask T1 to binary mask');
+    node_bin_mask_brain = Node(fsl.UnaryMaths(  # fslmaths T1_brain -bin T1_binarized mask
+            operation='bin', # (-bin)
+            #in_file (T1_brain)
+            #out_file (T1_binarized_mask)
+            ),
+    name="binarize_mask");
+    
+    print('Extract brain mask from T1 using binary mask');
+    node_extract_mask = Node(fsl.BinaryMaths(  # fslmaths T1 -mul T1_binarized_mask T1_extracted_mask
+            operation='mul'# (-mul)
+            #in_file (T1)
+            #out_file (T1_extracted_mask)
+            #operand_file (T1_binarized_mask)
+            ),
+    name="extract_mask");
 
+## 
     print ("Estimate and appply transformation from SBref to T1");
     node_epireg = Node(fsl.EpiReg(
             #t1_head=SUBJECT_FSTRUCT_DIC['anat_T1'],
@@ -157,6 +189,8 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
         'sb_ref_unwarped_img',
     ]),
     name='output_node')  
+    
+    print("All nodes created; Starts creating connections")
                                                      
     #Connects nodes
     wf.connect([
@@ -168,12 +202,18 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                                                       ("func_segfm_pa_img", "in2")]),
                 (node_merge_ap_pa_inputs, node_merge_SEgfm,[("out", "in_files")]),
                 (node_input, node_epireg, [("T1_img", "t1_head")]),
-                (node_input, node_mask_T1, [("T1_img", "in_file")]),
+                (node_input, node_vol2vol_brain, [("T1_brain_freesurfer_mask","source_file")]),
+                (node_input, node_vol2vol_brain, [("T1_img","target_file")]),
+                (node_input, node_extract_mask, [("T1_img","in_file")]),
                                             
                 #connections    
                 (node_eliminate_first_scans, node_realign_bold, [("roi_file", "in_file")]),
                 (node_average_SEgfm , node_coregister_SBref2SEgfm, [("out_file", "reference")]),
                 (node_coregister_SBref2SEgfm , node_realign_bold, [("out_file", "ref_file")]),
+                
+                #T1 brain mask transformations (change space / vol2vol, binarize and extract)
+                (node_vol2vol_brain, node_bin_mask_brain, [("transformed_file","in_file")]),
+                (node_bin_mask_brain, node_extract_mask, [("out_file", "operand_file")]),
                 
                 #(node_realign_bold, node_tsnr, [("out_file", "in_file")]),                 
                 (node_merge_SEgfm, node_topup_SEgfm, [("merged_file", "in_file")]),              
@@ -181,11 +221,12 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_topup_SEgfm , node_apply_topup, [("out_fieldcoef", "in_topup_fieldcoef"),
                                                        ("out_movpar","in_topup_movpar") ]),
                 (node_topup_SEgfm , node_apply_topup_to_SBref, [("out_fieldcoef", "in_topup_fieldcoef"),
-                                                       ("out_movpar","in_topup_movpar") ]),
+                                                                ("out_movpar","in_topup_movpar") ]),
+    
                 (node_coregister_SBref2SEgfm , node_apply_topup_to_SBref, [("out_file", "in_files")]),
                 
                 #corregister to T1
-                (node_mask_T1 , node_epireg, [("out_file", "t1_brain")]),
+                (node_extract_mask , node_epireg, [("out_file", "t1_brain")]),
                 (node_apply_topup_to_SBref , node_epireg, [("out_corrected", "epi")]),
                 (node_epireg,node_invert_epi2reg,[("epi2str_mat", "in_file")]),
                 (node_coregister_SBref2SEgfm,node_mask_fMRI,[("out_file", "in_file")]),
@@ -199,8 +240,9 @@ def get_fmri2standard_wf(tvols, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preproce
                 (node_epireg, node_output,[("out_file","epi2str_img")]),
                 (node_topup_SEgfm, node_output, [("out_fieldcoef", "topup_field_coef_img"),
                                                  ("out_corrected","sb_ref_unwarped_img")]),
-                (node_apply_topup, node_output,[("out_corrected","rfmri_unwarped_imgs")]),
+                (node_apply_topup, node_output, [("out_corrected","rfmri_unwarped_imgs")])
         
                 
     ]);      
+    print("All connections created")
     return(wf)
