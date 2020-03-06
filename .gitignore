@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+Structural/fixing_recon15-31_T1T2.sh
+
+Structural/how_many_files.sh
+
+Structural/tmp.sh
