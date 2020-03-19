@@ -6,6 +6,7 @@ Created on Tue Feb  4 12:27:39 2020
 """
 
 
+
 def get_fmri2standard_wf(tvols, subject_id, ACQ_PARAMS="/home/didac/LabScripts/fMRI_preprocess/acparams_hcp.txt"):
     """Estimates transformation from Gradiend Field Distortion-warped BOLD to T1
     
