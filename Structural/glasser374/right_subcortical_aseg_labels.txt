@@ -1,0 +1,7 @@
+1 53 R_Hippocampus
+2 54 R_Amygdala
+3 52 R_Pallidum
+4 51 R_Putamen
+5 50 R_Caudate
+6 58 R_Accumbens
+7 49 R_Thalamus
