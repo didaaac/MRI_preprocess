@@ -1,0 +1,7 @@
+1 17 L_Hippocampus
+2 18 L_Amygdala
+3 13 L_Pallidum
+4 12 L_Putamen
+5 11 L_Caudate
+6 26 L_Accumbens
+7 10 L_Thalamus

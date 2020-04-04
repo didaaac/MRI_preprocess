@@ -15,21 +15,13 @@ import os
 root_path = '/home/mariacabello/wf_workspace/thesis_data'
 heudiconv_folder='func_anat'
 fmri2standard_folder='fmri2standard'
+bids_path=root_path+'/func_anat'
+fmri2standard_path=root_path+'/'+fmri2standard_folder
 
-#root_path = '/home/mariacabello/wf_workspace/'
-#heudiconv_folder='HEUDICONV_func'
-#fmri2standard_folder='OUTPUT_fmri2standard'
+all_subjects = [f for f in os.listdir(bids_path) if os.path.isdir(os.path.join(bids_path, f)) and f.find("sub-")!=-1]
+done_subjects = [f for f in os.listdir(fmri2standard_path) if os.path.isdir(os.path.join(fmri2standard_path, f)) and f.find("sub-")!=-1]
 
-list_subjs = [
-        "sub-103151",
-        "sub-116245","sub-129073","sub-151965",
-        "sub-161022",
-        #"sub-184420", ¿?¿?¿? NO BOLD
-        "sub-185225","sub-187232","sub-48296"
-        #"sub-49664",
-        #"sub-50000","sub-73417","sub-84766","sub-86143","sub-88604",
-        #"sub-92889","sub-92918","sub-93338"
-        ]
+list_subjs=set(all_subjects).difference(set(done_subjects))
 
 coreg_EPI2T1 = spm.Coregister(
         # target (reference; fixed) [in .nii]
@@ -38,24 +30,24 @@ coreg_EPI2T1 = spm.Coregister(
 )
 
 for subject_id in list_subjs:
-#    #defines WF
-#    fmri2t1_wf=get_fmri2standard_wf([10,500], subject_id, '/home/mariacabello/git_projects/MRI_preprocess/Functional/acparams_hcp.txt')
-#    
-#    fmri2t1_wf.base_dir=root_path+'fmri2standard'
-#    
-#    #sets necessary inputs
-#    fmri2t1_wf.inputs.input_node.T1_img = root_path+'func_anat/{subject_id}/ses-01/anat/{subject_id}_ses-01_run-01_T1w.nii.gz'.format(subject_id=subject_id)
-#    fmri2t1_wf.inputs.input_node.func_bold_ap_img = root_path+'func_anat/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_bold_ap.nii.gz'.format(subject_id=subject_id)
-#    fmri2t1_wf.inputs.input_node.func_sbref_img = root_path+'func_anat/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sbref_ap.nii.gz'.format(subject_id=subject_id)
-#    fmri2t1_wf.inputs.input_node.func_segfm_ap_img = root_path+'func_anat/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sefm_ap.nii.gz'.format(subject_id=subject_id)
-#    fmri2t1_wf.inputs.input_node.func_segfm_pa_img = root_path+'func_anat/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sefm_pa.nii.gz'.format(subject_id=subject_id)
-#    fmri2t1_wf.inputs.input_node.T1_brain_freesurfer_mask = '/institut/processed_data/BBHI_output/structural/{subject_id}/mri/brainmask.mgz'.format(subject_id=subject_id)
-#    
-#    #writes WF graph and runs it
-#    #fmri2t1_wf.write_graph()
-#    fmri2t1_wf.run()
-#       
-#
+    #defines WF
+    fmri2t1_wf=get_fmri2standard_wf([10,500], subject_id, '/home/mariacabello/git_projects/MRI_preprocess/Functional/acparams_hcp.txt')
+    
+    fmri2t1_wf.base_dir=root_path+'/fmri2standard'
+    
+    #sets necessary inputs
+    fmri2t1_wf.inputs.input_node.T1_img = bids_path+'/{subject_id}/ses-01/anat/{subject_id}_ses-01_run-01_T1w.nii.gz'.format(subject_id=subject_id)
+    fmri2t1_wf.inputs.input_node.func_bold_ap_img = bids_path+'/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_bold_ap.nii.gz'.format(subject_id=subject_id)
+    fmri2t1_wf.inputs.input_node.func_sbref_img = bids_path+'/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sbref_ap.nii.gz'.format(subject_id=subject_id)
+    fmri2t1_wf.inputs.input_node.func_segfm_ap_img = bids_path+'/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sefm_ap.nii.gz'.format(subject_id=subject_id)
+    fmri2t1_wf.inputs.input_node.func_segfm_pa_img = bids_path+'/{subject_id}/ses-01/func/{subject_id}_ses-01_run-01_rest_sefm_pa.nii.gz'.format(subject_id=subject_id)
+    fmri2t1_wf.inputs.input_node.T1_brain_freesurfer_mask = '/institut/processed_data/BBHI_output/structural/{subject_id}/mri/brainmask.mgz'.format(subject_id=subject_id)
+    
+    #writes WF graph and runs it
+    #fmri2t1_wf.write_graph()
+    fmri2t1_wf.run()
+       
+
     sbref_path = root_path+'/'+fmri2standard_folder+"/{subject_id}/apply_topup_to_SBref/{subject_id}_ses-01_run-01_rest_sbref_ap_flirt_corrected_coregistered2T1.nii".format(subject_id=subject_id)
     bold_path = root_path+'/'+fmri2standard_folder+"/{subject_id}/apply_topup/{subject_id}_ses-01_run-01_rest_bold_ap_roi_mcf_corrected_coregistered2T1.nii".format(subject_id=subject_id)
        
@@ -85,5 +77,5 @@ for subject_id in list_subjs:
     aseg_folder = "/institut/processed_data/BBHI_output/structural/" + subject_id + "/mri/aseg.mgz"
     os.system("mkdir -p " + root_path+"/nuisance_correction"+"/"+subject_id)
     os.system("mkdir -p " + output_masks)
-    os.system("bash extract_wm_csf_eroded_masks.sh -s " + subject_id + " -a " + aseg_folder  + " -r " + bold2T1_path + " -o " + output_masks + " -b " + bold2T1_path + " -e 1")
+    os.system("bash extract_wm_csf_eroded_masks.sh -s " + subject_id + " -a " + aseg_folder  + " -r " + bold2T1_path + " -o " + output_masks + " -b " + bold2T1_path + " -e 2")
     
